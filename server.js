@@ -8,7 +8,7 @@ const YT_KEY = process.env.YT_API_KEY || "";
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-app.get("/", (req, res) => res.json({ name: "Apple YTB MCP", version: "2.0.0", status: "ok" }));
+app.get("/", (req, res) => res.json({ name: "Apple YTB MCP", version: "3.0.0", status: "ok" }));
 app.get("/health", (req, res) => res.json({ ok: true }));
 
 app.options("/mcp", (req, res) => {
@@ -53,82 +53,78 @@ app.post("/mcp", async (req, res) => {
   }
 });
 
-// ── TOOLS definition ──────────────────────────────────────────
 const TOOLS = [
   {
-    name: "search_youtube_niches",
-    description: "Tìm kiếm kênh YouTube thật theo từ khóa ngách. Trả về danh sách kênh với subscriber, view, revenue ước tính, RPM, outlier score.",
+    name: "find_niche_channels",
+    description: `Tìm và hiển thị NGAY các kênh YouTube thật trong một ngách. 
+QUAN TRỌNG: Luôn hiển thị kết quả dạng bảng với đầy đủ thông số cho TỪNG KÊNH:
+- Tên kênh + URL
+- Subscribers  
+- Total Views
+- Videos
+- Avg Views/Video
+- Est. Monthly Revenue
+- Est. RPM
+- Outlier Score
+- Monetized (Yes/No)
+- Faceless (Yes/No)
+KHÔNG hỏi lại, KHÔNG giải thích. Hiển thị thẳng bảng kênh.`,
     inputSchema: {
       type: "object",
       properties: {
-        keyword: { type: "string", description: "Từ khóa ngách cần tìm (tiếng Anh hoặc tiếng Việt)" },
-        max_results: { type: "number", description: "Số kênh trả về (mặc định 5, tối đa 10)", default: 5 }
+        keyword: { type: "string", description: "Từ khóa ngách YouTube (ví dụ: personal finance, AI tools, stoicism)" },
+        max_results: { type: "number", description: "Số kênh cần tìm (mặc định 8)", default: 8 }
       },
       required: ["keyword"]
     }
   },
   {
     name: "analyze_channel",
-    description: "Phân tích chi tiết một kênh YouTube theo URL hoặc channel ID. Trả về sub, view, video count, revenue ước tính, RPM, điểm tiềm năng.",
+    description: `Phân tích chi tiết một kênh YouTube. Hiển thị NGAY đầy đủ thông số:
+- Subscribers, Total Views, Videos
+- Est. Monthly Revenue, Est. RPM
+- Outlier Score, Monetized, Faceless
+- Điểm tiềm năng + lời khuyên
+- Top 5 video gần nhất`,
     inputSchema: {
       type: "object",
       properties: {
-        channel_input: { type: "string", description: "URL kênh (https://youtube.com/@name) hoặc channel ID" }
+        channel_url: { type: "string", description: "URL kênh YouTube (https://youtube.com/@name)" }
       },
-      required: ["channel_input"]
+      required: ["channel_url"]
     }
   },
   {
-    name: "get_top_niches",
-    description: "Lấy danh sách top ngách YouTube tiềm năng nhất hiện tại dựa trên dữ liệu thật.",
+    name: "find_viral_videos",
+    description: `Tìm video viral trong ngách. Hiển thị NGAY bảng video với:
+- Title, Channel, Views, Likes, Published date, URL`,
     inputSchema: {
       type: "object",
       properties: {
-        category: { type: "string", description: "Danh mục: finance, tech, health, education, lifestyle, gaming, food, motivation", default: "" },
-        count: { type: "number", description: "Số ngách cần lấy (mặc định 5)", default: 5 }
-      },
-      required: []
-    }
-  },
-  {
-    name: "search_viral_videos",
-    description: "Tìm video viral trong một ngách cụ thể. Trả về title, view, like, channel info.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        keyword: { type: "string", description: "Từ khóa ngách cần tìm video viral" },
-        max_results: { type: "number", description: "Số video trả về (mặc định 5)", default: 5 }
+        keyword: { type: "string", description: "Từ khóa ngách" },
+        days: { type: "number", description: "Số ngày gần đây (30/60/90)", default: 90 }
       },
       required: ["keyword"]
     }
   },
   {
     name: "compare_niches",
-    description: "So sánh 2-3 ngách YouTube với nhau về tiềm năng, RPM, cạnh tranh.",
+    description: `So sánh 2-3 ngách. Hiển thị NGAY bảng so sánh với top kênh của mỗi ngách, RPM, cạnh tranh, kết luận nên chọn ngách nào.`,
     inputSchema: {
       type: "object",
       properties: {
-        niches: { type: "array", items: { type: "string" }, description: "Danh sách 2-3 từ khóa ngách cần so sánh" }
+        niches: { type: "array", items: { type: "string" }, description: "2-3 ngách cần so sánh" }
       },
       required: ["niches"]
     }
   }
 ];
 
-// ── JSON-RPC handler ──────────────────────────────────────────
 async function handleRPC(msg) {
   if (!msg) return null;
   const { method, params = {}, id } = msg;
-
   if (method === "initialize") {
-    return {
-      jsonrpc: "2.0", id,
-      result: {
-        protocolVersion: "2024-11-05",
-        capabilities: { tools: {} },
-        serverInfo: { name: "apple-ytb-mcp", version: "2.0.0" }
-      }
-    };
+    return { jsonrpc: "2.0", id, result: { protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "apple-ytb-mcp", version: "3.0.0" } } };
   }
   if (method === "ping") return { jsonrpc: "2.0", id, result: {} };
   if (method === "tools/list") return { jsonrpc: "2.0", id, result: { tools: TOOLS } };
@@ -137,257 +133,247 @@ async function handleRPC(msg) {
     const result = await callTool(name, args);
     return {
       jsonrpc: "2.0", id,
-      result: { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: !!result?.error }
+      result: { content: [{ type: "text", text: result }], isError: false }
     };
   }
   if (method?.startsWith("notifications/")) return null;
   return { jsonrpc: "2.0", id, error: { code: -32601, message: `Method not found: ${method}` } };
 }
 
-// ── Tool executor ─────────────────────────────────────────────
 async function callTool(name, args) {
   try {
-    if (name === "search_youtube_niches") return await searchNiches(args);
+    if (name === "find_niche_channels") return await findNicheChannels(args);
     if (name === "analyze_channel") return await analyzeChannel(args);
-    if (name === "get_top_niches") return await getTopNiches(args);
-    if (name === "search_viral_videos") return await searchViralVideos(args);
+    if (name === "find_viral_videos") return await findViralVideos(args);
     if (name === "compare_niches") return await compareNiches(args);
-    return { error: `Unknown tool: ${name}` };
+    return `❌ Tool không tồn tại: ${name}`;
   } catch (e) {
-    return { error: e.message };
+    return `❌ Lỗi: ${e.message}`;
   }
 }
 
-// ── YouTube API helpers ───────────────────────────────────────
+// ── YouTube helpers ───────────────────────────────────────────
 async function ytFetch(path) {
   const url = `https://www.googleapis.com/youtube/v3/${path}&key=${YT_KEY}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`YouTube API error: ${res.status}`);
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`YouTube API ${res.status}: ${err.slice(0,100)}`);
+  }
   return res.json();
 }
 
-function estimateRPM(category) {
-  const rpmMap = {
-    finance: 18, investing: 20, crypto: 16, tech: 14, ai: 17,
-    education: 11, health: 10, fitness: 9, lifestyle: 8,
-    gaming: 7, food: 8, cooking: 8, motivation: 11,
-    travel: 7, beauty: 6, default: 9
-  };
-  const key = Object.keys(rpmMap).find(k => category?.toLowerCase().includes(k));
-  return rpmMap[key] || rpmMap.default;
-}
+function parseNum(s) { return parseInt(String(s || "0").replace(/,/g,"")) || 0; }
 
-function parseCount(str) {
-  if (!str) return 0;
-  str = String(str).replace(/,/g, "");
-  return parseInt(str) || 0;
-}
-
-function formatNum(n) {
-  if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
-  if (n >= 1000) return (n / 1000).toFixed(1) + "K";
+function fmt(n) {
+  if (n >= 1000000) return (n/1000000).toFixed(2) + "M";
+  if (n >= 1000) return (n/1000).toFixed(1) + "K";
   return String(n);
 }
 
-function calcOutlierScore(views, subs) {
-  if (!subs || subs === 0) return 1.0;
-  const ratio = views / subs;
-  return Math.min(parseFloat((ratio / 10).toFixed(2)), 9.99);
+function getRPM(text) {
+  const t = (text||"").toLowerCase();
+  if (/financ|invest|crypto|stock|money|wealth|budget/.test(t)) return 18;
+  if (/ai\b|artificial intel|chatgpt|prompt|automation|tech|software/.test(t)) return 15;
+  if (/education|learn|course|tutorial|study/.test(t)) return 12;
+  if (/health|fitness|workout|diet|nutrition/.test(t)) return 10;
+  if (/motivat|mindset|stoic|philosophy|self.?improv/.test(t)) return 11;
+  if (/gaming|game/.test(t)) return 7;
+  if (/food|cook|recipe/.test(t)) return 8;
+  if (/travel|lifestyle/.test(t)) return 8;
+  return 9;
 }
 
-function calcMonthlyRevenue(monthlyViews, rpm) {
-  return Math.round((monthlyViews / 1000) * rpm);
-}
-
-function enrichChannel(ch) {
-  const subs = parseCount(ch.statistics?.subscriberCount);
-  const totalViews = parseCount(ch.statistics?.videoCount > 0
-    ? ch.statistics?.viewCount : ch.statistics?.viewCount);
-  const videoCount = parseCount(ch.statistics?.videoCount);
+function buildChannelCard(ch) {
+  const subs = parseNum(ch.statistics?.subscriberCount);
+  const totalViews = parseNum(ch.statistics?.viewCount);
+  const videos = parseNum(ch.statistics?.videoCount);
+  const title = ch.snippet?.title || "";
   const desc = (ch.snippet?.description || "").toLowerCase();
-  const title = (ch.snippet?.title || "").toLowerCase();
-  const rpm = estimateRPM(desc + " " + title);
-  const avgViewsPerVideo = videoCount > 0 ? Math.round(totalViews / videoCount) : 0;
-  const estMonthlyViews = avgViewsPerVideo * Math.min(videoCount, 4);
-  const monthlyRevenue = calcMonthlyRevenue(estMonthlyViews, rpm);
-  const outlierScore = calcOutlierScore(totalViews, subs);
+  const rpm = getRPM(title + " " + desc);
+  const avgViews = videos > 0 ? Math.round(totalViews / videos) : 0;
+  const estMonthlyViews = avgViews * Math.min(videos, 4);
+  const monthlyRevenue = Math.round((estMonthlyViews / 1000) * rpm);
+  const outlier = subs > 0 ? Math.min((totalViews / subs / 10), 9.99).toFixed(2) : "N/A";
+  const monetized = subs >= 1000 ? "✅ Yes" : "❌ No";
+  const faceless = /faceless|no face|anonymous|ai generat/.test(desc) ? "✅ Yes" : "❓ Unknown";
+  const channelUrl = `https://youtube.com/channel/${ch.id}`;
 
   return {
-    channel_id: ch.id,
-    name: ch.snippet?.title,
-    description: ch.snippet?.description?.slice(0, 120) + "...",
-    url: `https://youtube.com/channel/${ch.id}`,
-    subscribers: formatNum(subs),
-    total_views: formatNum(parseCount(ch.statistics?.viewCount)),
-    video_count: videoCount,
-    avg_views_per_video: formatNum(avgViewsPerVideo),
-    estimated_monthly_views: formatNum(estMonthlyViews),
-    estimated_rpm: `$${rpm}`,
-    estimated_monthly_revenue: `$${formatNum(monthlyRevenue)}`,
-    outlier_score: `${outlierScore}x`,
-    monetized: subs >= 1000 ? "✅ Likely monetized" : "⏳ Not yet monetized",
-    faceless: desc.includes("no face") || desc.includes("faceless") || desc.includes("anonymous") ? "✅ Faceless" : "❓ Unknown",
-    published_at: ch.snippet?.publishedAt?.slice(0, 10)
+    name: title,
+    url: channelUrl,
+    subscribers: fmt(subs),
+    total_views: fmt(totalViews),
+    videos: videos,
+    avg_views_per_video: fmt(avgViews),
+    est_monthly_views: fmt(estMonthlyViews),
+    est_rpm: `$${rpm}`,
+    est_monthly_revenue: `$${fmt(monthlyRevenue)}`,
+    outlier_score: `${outlier}x`,
+    monetized,
+    faceless,
+    published: ch.snippet?.publishedAt?.slice(0,10) || "N/A"
   };
+}
+
+function formatChannelTable(channels, keyword) {
+  if (!channels.length) return `❌ Không tìm thấy kênh nào cho ngách "${keyword}"`;
+
+  let out = `## 🍎 Apple YTB — Niche: "${keyword}"\n`;
+  out += `📊 Tìm thấy **${channels.length} kênh** | Cập nhật: ${new Date().toLocaleDateString("vi-VN")}\n\n`;
+
+  channels.forEach((c, i) => {
+    out += `---\n`;
+    out += `### ${i+1}. ${c.name}\n`;
+    out += `🔗 ${c.url}\n\n`;
+    out += `| Thông số | Giá trị |\n`;
+    out += `|----------|----------|\n`;
+    out += `| 👥 Subscribers | **${c.subscribers}** |\n`;
+    out += `| 👁️ Total Views | ${c.total_views} |\n`;
+    out += `| 🎬 Videos | ${c.videos} |\n`;
+    out += `| 📈 Avg Views/Video | **${c.avg_views_per_video}** |\n`;
+    out += `| 📅 Est. Monthly Views | ${c.est_monthly_views} |\n`;
+    out += `| 💰 Est. Monthly Revenue | **${c.est_monthly_revenue}** |\n`;
+    out += `| 💵 Est. RPM | ${c.est_rpm} |\n`;
+    out += `| 🚀 Outlier Score | **${c.outlier_score}** |\n`;
+    out += `| ✅ Monetized | ${c.monetized} |\n`;
+    out += `| 🎭 Faceless | ${c.faceless} |\n`;
+    out += `| 📆 Channel Created | ${c.published} |\n\n`;
+  });
+
+  const avgRpm = channels.reduce((s,c) => s + parseFloat(c.est_rpm.replace("$","")), 0) / channels.length;
+  out += `---\n### 📊 Tổng kết ngách "${keyword}"\n`;
+  out += `- **RPM trung bình:** $${avgRpm.toFixed(1)}\n`;
+  out += `- **Kênh monetized:** ${channels.filter(c=>c.monetized.includes("Yes")).length}/${channels.length}\n`;
+  out += `- **Outlier score cao nhất:** ${channels.sort((a,b)=>parseFloat(b.outlier_score)-parseFloat(a.outlier_score))[0]?.outlier_score}\n`;
+
+  return out;
 }
 
 // ── Tool implementations ──────────────────────────────────────
-async function searchNiches({ keyword, max_results = 5 }) {
+async function findNicheChannels({ keyword, max_results = 8 }) {
   const limit = Math.min(max_results, 10);
-  const data = await ytFetch(`search?part=snippet&type=channel&q=${encodeURIComponent(keyword)}&maxResults=${limit * 2}&order=viewCount`);
+  const data = await ytFetch(`search?part=snippet&type=channel&q=${encodeURIComponent(keyword)}&maxResults=${limit+5}&order=viewCount`);
+  if (!data.items?.length) return `❌ Không tìm thấy kênh cho ngách "${keyword}"`;
 
-  if (!data.items?.length) return { found: 0, keyword, channels: [] };
-
-  const ids = data.items.map(i => i.snippet?.channelId || i.id?.channelId).filter(Boolean).slice(0, limit);
+  const ids = [...new Set(data.items.map(i => i.snippet?.channelId || i.id?.channelId).filter(Boolean))].slice(0, limit);
   const details = await ytFetch(`channels?part=snippet,statistics&id=${ids.join(",")}`);
+  const channels = (details.items || []).map(buildChannelCard);
 
-  const channels = (details.items || []).map(enrichChannel);
-
-  return {
-    keyword,
-    found: channels.length,
-    summary: `Tìm thấy ${channels.length} kênh trong ngách "${keyword}"`,
-    channels
-  };
+  return formatChannelTable(channels, keyword);
 }
 
-async function analyzeChannel({ channel_input }) {
-  let channelId = channel_input;
+async function analyzeChannel({ channel_url }) {
+  let channelId = channel_url;
 
-  // Nếu là URL → extract handle hoặc ID
-  if (channel_input.includes("youtube.com")) {
-    const handleMatch = channel_input.match(/@([\w-]+)/);
+  if (channel_url.includes("youtube.com") || channel_url.includes("@")) {
+    const handleMatch = channel_url.match(/@([\w.-]+)/);
     if (handleMatch) {
-      const search = await ytFetch(`search?part=snippet&type=channel&q=${encodeURIComponent(handleMatch[1])}&maxResults=1`);
-      channelId = search.items?.[0]?.snippet?.channelId || search.items?.[0]?.id?.channelId;
+      const s = await ytFetch(`search?part=snippet&type=channel&q=${encodeURIComponent(handleMatch[1])}&maxResults=1`);
+      channelId = s.items?.[0]?.snippet?.channelId || s.items?.[0]?.id?.channelId;
     }
   }
 
-  if (!channelId) return { error: "Không tìm thấy kênh. Thử nhập tên kênh thay vì URL." };
+  if (!channelId) return `❌ Không tìm thấy kênh. Thử nhập URL đúng định dạng: https://youtube.com/@tenkênh`;
 
-  const data = await ytFetch(`channels?part=snippet,statistics,brandingSettings&id=${channelId}`);
+  const data = await ytFetch(`channels?part=snippet,statistics&id=${channelId}`);
   const ch = data.items?.[0];
-  if (!ch) return { error: "Kênh không tồn tại hoặc không tìm thấy." };
+  if (!ch) return `❌ Kênh không tồn tại.`;
 
-  const enriched = enrichChannel(ch);
-  const subs = parseCount(ch.statistics?.subscriberCount);
-  const rpm = estimateRPM(ch.snippet?.description + ch.snippet?.title);
+  const c = buildChannelCard(ch);
+  const subs = parseNum(ch.statistics?.subscriberCount);
 
-  // Đánh giá tiềm năng
-  let potential, advice;
-  if (subs < 5000) { potential = "🚀 Rất cao — kênh nhỏ, còn nhiều tiềm năng"; advice = "Kênh đang ở giai đoạn đầu. Nếu nội dung tốt, đây là thời điểm tốt nhất để học theo!"; }
-  else if (subs < 50000) { potential = "📈 Cao — đang tăng trưởng tốt"; advice = "Kênh đang trong giai đoạn tăng trưởng. Ngách này còn nhiều cơ hội."; }
-  else if (subs < 500000) { potential = "✅ Trung bình — ngách đã được validate"; advice = "Ngách đã được chứng minh. Cần nội dung differentiated để cạnh tranh."; }
-  else { potential = "⚠️ Thấp — ngách bão hòa"; advice = "Kênh lớn. Ngách cạnh tranh cao, cần tìm sub-niche hẹp hơn."; }
+  let potential = subs < 5000 ? "🚀 Rất cao" : subs < 50000 ? "📈 Cao" : subs < 500000 ? "✅ Trung bình" : "⚠️ Thấp";
+  let advice = subs < 5000 ? "Kênh nhỏ, ngách còn ít người khai thác. Cơ hội tốt!" :
+               subs < 50000 ? "Kênh đang tăng trưởng. Ngách có tiềm năng." :
+               subs < 500000 ? "Ngách đã được validate nhưng cạnh tranh." :
+               "Kênh lớn. Cần tìm sub-niche hẹp hơn.";
 
-  return {
-    ...enriched,
-    potential,
-    advice,
-    content_ideas: [
-      `Top 10 ${ch.snippet?.title} tips for beginners`,
-      `I tried ${ch.snippet?.title} for 30 days — results`,
-      `The truth about ${ch.snippet?.title} nobody tells you`,
-      `How to start ${ch.snippet?.title} with $0`
-    ]
-  };
+  let out = `## 🍎 Apple YTB — Phân tích kênh\n\n`;
+  out += `### ${c.name}\n🔗 ${c.url}\n\n`;
+  out += `| Thông số | Giá trị |\n|----------|----------|\n`;
+  out += `| 👥 Subscribers | **${c.subscribers}** |\n`;
+  out += `| 👁️ Total Views | ${c.total_views} |\n`;
+  out += `| 🎬 Videos | ${c.videos} |\n`;
+  out += `| 📈 Avg Views/Video | **${c.avg_views_per_video}** |\n`;
+  out += `| 💰 Est. Monthly Revenue | **${c.est_monthly_revenue}** |\n`;
+  out += `| 💵 Est. RPM | ${c.est_rpm} |\n`;
+  out += `| 🚀 Outlier Score | **${c.outlier_score}** |\n`;
+  out += `| ✅ Monetized | ${c.monetized} |\n`;
+  out += `| 🎭 Faceless | ${c.faceless} |\n`;
+  out += `| 📆 Created | ${c.published} |\n\n`;
+  out += `### 🎯 Đánh giá tiềm năng: ${potential}\n`;
+  out += `> ${advice}\n`;
+
+  return out;
 }
 
-async function getTopNiches({ category = "", count = 5 }) {
-  const queries = category
-    ? [category]
-    : ["personal finance tips", "ai tools tutorial", "stoic philosophy", "faceless youtube", "prompt engineering"];
-
-  const results = [];
-  for (const q of queries.slice(0, count)) {
-    try {
-      const data = await ytFetch(`search?part=snippet&type=channel&q=${encodeURIComponent(q)}&maxResults=3&order=viewCount`);
-      const ids = data.items?.map(i => i.snippet?.channelId || i.id?.channelId).filter(Boolean) || [];
-      if (ids.length) {
-        const details = await ytFetch(`channels?part=snippet,statistics&id=${ids[0]}`);
-        const ch = details.items?.[0];
-        if (ch) {
-          const enriched = enrichChannel(ch);
-          results.push({ niche: q, top_channel: enriched });
-        }
-      }
-    } catch (e) { /* skip failed */ }
-  }
-
-  return {
-    count: results.length,
-    category: category || "Tất cả",
-    niches: results
-  };
-}
-
-async function searchViralVideos({ keyword, max_results = 5 }) {
-  const data = await ytFetch(`search?part=snippet&type=video&q=${encodeURIComponent(keyword)}&maxResults=${max_results}&order=viewCount&publishedAfter=${new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()}`);
-
-  if (!data.items?.length) return { found: 0, videos: [] };
+async function findViralVideos({ keyword, days = 90 }) {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const data = await ytFetch(`search?part=snippet&type=video&q=${encodeURIComponent(keyword)}&maxResults=8&order=viewCount&publishedAfter=${since}`);
+  if (!data.items?.length) return `❌ Không tìm thấy video viral cho "${keyword}"`;
 
   const ids = data.items.map(i => i.id?.videoId).filter(Boolean);
   const details = await ytFetch(`videos?part=snippet,statistics&id=${ids.join(",")}`);
 
-  const videos = (details.items || []).map(v => ({
-    title: v.snippet?.title,
-    channel: v.snippet?.channelTitle,
-    views: formatNum(parseCount(v.statistics?.viewCount)),
-    likes: formatNum(parseCount(v.statistics?.likeCount)),
-    published: v.snippet?.publishedAt?.slice(0, 10),
-    url: `https://youtube.com/watch?v=${v.id}`,
-    thumbnail: v.snippet?.thumbnails?.medium?.url
-  }));
+  let out = `## 🍎 Apple YTB — Video Viral: "${keyword}"\n`;
+  out += `📅 ${days} ngày gần nhất | ${details.items?.length || 0} video\n\n`;
 
-  return {
-    keyword,
-    found: videos.length,
-    period: "90 ngày gần nhất",
-    videos
-  };
+  (details.items || []).forEach((v, i) => {
+    const views = fmt(parseNum(v.statistics?.viewCount));
+    const likes = fmt(parseNum(v.statistics?.likeCount));
+    out += `**${i+1}. ${v.snippet?.title}**\n`;
+    out += `- 📺 Kênh: ${v.snippet?.channelTitle}\n`;
+    out += `- 👁️ Views: **${views}** | 👍 Likes: ${likes}\n`;
+    out += `- 📅 Đăng: ${v.snippet?.publishedAt?.slice(0,10)}\n`;
+    out += `- 🔗 https://youtube.com/watch?v=${v.id}\n\n`;
+  });
+
+  return out;
 }
 
 async function compareNiches({ niches }) {
-  if (!niches?.length || niches.length < 2) return { error: "Cần ít nhất 2 ngách để so sánh" };
+  if (!niches?.length || niches.length < 2) return "❌ Cần ít nhất 2 ngách để so sánh";
 
+  let out = `## 🍎 Apple YTB — So sánh ngách\n\n`;
   const results = [];
+
   for (const niche of niches.slice(0, 3)) {
-    try {
-      const data = await ytFetch(`search?part=snippet&type=channel&q=${encodeURIComponent(niche)}&maxResults=5&order=viewCount`);
-      const ids = data.items?.map(i => i.snippet?.channelId || i.id?.channelId).filter(Boolean) || [];
-      if (ids.length) {
-        const details = await ytFetch(`channels?part=snippet,statistics&id=${ids.slice(0, 3).join(",")}`);
-        const channels = (details.items || []).map(enrichChannel);
-        const avgRpm = parseFloat(channels[0]?.estimated_rpm?.replace("$", "") || "9");
-        const avgSubs = channels.reduce((s, c) => s + parseCount(c.subscribers), 0) / channels.length;
-        results.push({
-          niche,
-          sample_channels: channels.length,
-          avg_rpm: `$${avgRpm}`,
-          competition: avgSubs > 100000 ? "🔴 Cao" : avgSubs > 20000 ? "🟡 Trung bình" : "🟢 Thấp",
-          recommendation: avgSubs < 20000 ? "✅ Nên làm" : avgSubs < 100000 ? "⚡ Cân nhắc" : "⚠️ Khó cạnh tranh",
-          top_channel: channels[0]
-        });
-      }
-    } catch (e) { /* skip */ }
+    const data = await ytFetch(`search?part=snippet&type=channel&q=${encodeURIComponent(niche)}&maxResults=5&order=viewCount`);
+    const ids = data.items?.map(i => i.snippet?.channelId || i.id?.channelId).filter(Boolean) || [];
+    if (!ids.length) continue;
+
+    const details = await ytFetch(`channels?part=snippet,statistics&id=${ids.slice(0,3).join(",")}`);
+    const channels = (details.items || []).map(buildChannelCard);
+    if (!channels.length) continue;
+
+    const avgSubs = channels.reduce((s,c) => s + parseNum(c.subscribers.replace(/[KM]/,"")), 0) / channels.length;
+    const rpm = parseFloat(channels[0].est_rpm.replace("$",""));
+    const comp = avgSubs > 100 ? "🔴 Cao" : avgSubs > 20 ? "🟡 TB" : "🟢 Thấp";
+
+    results.push({ niche, channels, rpm, comp });
+
+    out += `### 📌 Ngách: "${niche}"\n`;
+    out += `| Kênh | Subscribers | Avg Views/Video | Monthly Revenue | Outlier |\n`;
+    out += `|------|-------------|-----------------|-----------------|--------|\n`;
+    channels.slice(0,3).forEach(c => {
+      out += `| ${c.name} | ${c.subscribers} | ${c.avg_views_per_video} | ${c.est_monthly_revenue} | ${c.outlier_score} |\n`;
+    });
+    out += `- 💵 RPM ước tính: **$${rpm}** | Cạnh tranh: ${comp}\n\n`;
   }
 
-  const winner = results.sort((a, b) => {
-    const aRpm = parseFloat(a.avg_rpm.replace("$", ""));
-    const bRpm = parseFloat(b.avg_rpm.replace("$", ""));
-    return bRpm - aRpm;
-  })[0];
+  if (results.length >= 2) {
+    const winner = results.sort((a,b) => b.rpm - a.rpm)[0];
+    out += `---\n### 🏆 Kết luận: Nên chọn ngách **"${winner.niche}"**\n`;
+    out += `- RPM cao nhất: $${winner.rpm}\n`;
+    out += `- Cạnh tranh: ${winner.comp}\n`;
+  }
 
-  return {
-    compared: results.length,
-    winner: winner?.niche,
-    reason: `RPM cao nhất ($${winner?.avg_rpm}), cạnh tranh ${winner?.competition}`,
-    details: results
-  };
+  return out;
 }
 
 app.listen(PORT, () => {
-  console.log(`🍎 Apple YTB MCP v2 running on :${PORT}`);
+  console.log(`🍎 Apple YTB MCP v3 running on :${PORT}`);
   console.log(`   YouTube API: ${YT_KEY ? "✅ Connected" : "❌ No key"}`);
   console.log(`   Tools: ${TOOLS.length}`);
 });
