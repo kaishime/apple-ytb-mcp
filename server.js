@@ -56,24 +56,20 @@ app.post("/mcp", async (req, res) => {
 const TOOLS = [
   {
     name: "find_outlier_channels",
-    description: `[TOOL CHÍNH] Tìm kênh YouTube mới nổi giống NexLev Niche Finder.
-Filter theo:
-- Kênh mới (tạo trong X tháng gần đây)
-- Monthly views cao (est. > 1M/tháng)  
-- RPM cao ($5+)
-- Avg views/video cao (>50K)
-- Outlier score cao
-Hiển thị NGAY bảng từng kênh với ĐẦY ĐỦ thông số. KHÔNG tóm tắt.`,
+    description: `[TOOL CHÍNH - CHẠY NGAY] Tìm kênh YouTube mới nổi RPM cao, outlier score cao giống NexLev.
+QUAN TRỌNG: KHÔNG hỏi lại user. CHẠY NGAY với các giá trị mặc định nếu không có tham số.
+Keyword mặc định nếu không được cung cấp: tự động quét nhiều ngách RPM cao (finance, AI, tech, education, motivation).
+Hiển thị NGAY bảng từng kênh ĐẦY ĐỦ thông số. KHÔNG tóm tắt. KHÔNG hỏi thêm.`,
     inputSchema: {
       type: "object",
       properties: {
-        keyword: { type: "string", description: "Từ khóa ngách (ví dụ: finance, AI, stoicism, fitness)" },
-        min_avg_views: { type: "number", description: "Avg views/video tối thiểu (mặc định 50000)", default: 50000 },
-        min_rpm: { type: "number", description: "RPM tối thiểu ước tính (mặc định 5)", default: 5 },
-        months_old: { type: "number", description: "Kênh tạo trong X tháng gần đây (mặc định 12)", default: 12 },
-        max_results: { type: "number", description: "Số kênh tối đa (mặc định 10)", default: 10 }
+        keyword: { type: "string", description: "Từ khóa ngách. Nếu không có thì tự động quét finance,AI,tech,education,motivation", default: "auto" },
+        min_avg_views: { type: "number", description: "Avg views/video tối thiểu (mặc định 10000)", default: 10000 },
+        min_rpm: { type: "number", description: "RPM tối thiểu (mặc định 5)", default: 5 },
+        months_old: { type: "number", description: "Kênh tạo trong X tháng (mặc định 24)", default: 24 },
+        max_results: { type: "number", description: "Số kênh (mặc định 8)", default: 8 }
       },
-      required: ["keyword"]
+      required: []
     }
   },
   {
@@ -249,12 +245,23 @@ function renderCard(c, index) {
 }
 
 // ── Tool: find_outlier_channels (NexLev-style) ────────────────
-async function findOutlierChannels({ keyword, min_avg_views = 50000, min_rpm = 5, months_old = 12, max_results = 10 }) {
-  // Search nhiều lần với order khác nhau để có pool lớn
-  const searches = [
-    ytFetch(`search?part=snippet&type=channel&q=${encodeURIComponent(keyword)}&maxResults=20&order=viewCount`),
-    ytFetch(`search?part=snippet&type=channel&q=${encodeURIComponent(keyword + " channel")}&maxResults=20&order=relevance`),
+async function findOutlierChannels({ keyword, min_avg_views = 10000, min_rpm = 5, months_old = 24, max_results = 8 }) {
+  // Auto mode: quét nhiều ngách RPM cao nếu không có keyword
+  const HIGH_RPM_NICHES = [
+    "personal finance tips", "AI tools tutorial", "investing money",
+    "stoic philosophy", "prompt engineering", "side hustle income",
+    "python automation", "faceless youtube", "digital marketing",
+    "language learning tips"
   ];
+
+  const isAuto = !keyword || keyword === "auto" || keyword === "";
+  const searchKeywords = isAuto ? HIGH_RPM_NICHES.slice(0, 5) : [keyword, keyword + " tips"];
+  const displayKeyword = isAuto ? "Top RPM niches (auto)" : keyword;
+
+  // Search song song
+  const searches = searchKeywords.map(kw =>
+    ytFetch(`search?part=snippet&type=channel&q=${encodeURIComponent(kw)}&maxResults=10&order=viewCount`)
+  );
 
   const results = await Promise.allSettled(searches);
   const allItems = [];
@@ -269,7 +276,7 @@ async function findOutlierChannels({ keyword, min_avg_views = 50000, min_rpm = 5
     .filter(id => id && !seen.has(id) && seen.add(id))
     .slice(0, 30);
 
-  if (!ids.length) return `❌ Không tìm thấy kênh cho ngách "${keyword}"`;
+  if (!ids.length) return `❌ Không tìm thấy kênh nào`;
 
   // Fetch stats in batches of 15
   const batches = [];
@@ -292,7 +299,7 @@ async function findOutlierChannels({ keyword, min_avg_views = 50000, min_rpm = 5
   cards.sort((a, b) => b.outlier_raw - a.outlier_raw);
   const top = cards.slice(0, max_results);
 
-  let out = `## 🍎 Apple YTB — Outlier Channels: "${keyword}"\n`;
+  let out = `## 🍎 Apple YTB — Outlier Channels: "${displayKeyword}"\n`;
   out += `🔍 **Filter áp dụng:**\n`;
   out += `- ⏰ Kênh tạo trong **${months_old} tháng** gần đây\n`;
   out += `- 📈 Avg Views/Video ≥ **${fmt(min_avg_views)}**\n`;
